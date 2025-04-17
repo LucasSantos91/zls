@@ -926,7 +926,22 @@ fn writeNodeTokens(builder: *Builder, node: Ast.Node.Index) error{OutOfMemory}!v
 
             if (try lhs_type.lookupSymbol(builder.analyser, symbol_name)) |decl_type| {
                 const token_mod: TokenModifiers = .{
-                    .readonly = lhs_type.is_type_val and decl_type.isConst(),
+                    .readonly = if (lhs_type.is_type_val)
+                        decl_type.isConst()
+                    else blk: {
+                        var parent = lhs_node;
+                        while (true) {
+                            if (tree.nodeTag(parent) != .field_access) break;
+                            parent, _ = tree.nodeData(parent).node_and_token;
+                        }
+                        const parent_token = tree.nodeMainToken(parent);
+                        if (try builder.analyser.lookupSymbolGlobal(
+                            handle,
+                            offsets.identifierTokenToNameSlice(tree, parent_token),
+                            tree.tokenStart(parent_token),
+                        )) |parent_decl| break :blk parent_decl.isConst();
+                        break :blk false;
+                    },
                 };
                 switch (decl_type.decl) {
                     .ast_node => |decl_node| {
