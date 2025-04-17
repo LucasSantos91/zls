@@ -1056,6 +1056,12 @@ fn writeVarDecl(builder: *Builder, var_decl: Ast.full.VarDecl, resolved_type: ?A
     const token_mod: TokenModifiers = .{
         .declaration = true,
         .readonly = builder.handle.tree.tokenTag(var_decl.ast.mut_token) == .keyword_const,
+        .static = blk: {
+            const document_scope = try builder.handle.getDocumentScope();
+            const scope_index = Analyser.innermostScopeAtIndex(document_scope, var_decl.ast.mut_token);
+            const scope_tag = document_scope.scopes.items(.data)[@intFromEnum(scope_index)].tag;
+            break :blk scope_tag == .container;
+        },
     };
     if (resolved_type) |decl_type| {
         try colorIdentifierBasedOnType(builder, decl_type, var_decl.ast.mut_token + 1, false, token_mod);
