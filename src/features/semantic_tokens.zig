@@ -1098,6 +1098,12 @@ fn writeIdentifier(builder: *Builder, name_token: Ast.TokenIndex) error{OutOfMem
     )) |child| {
         const is_param = child.decl == .function_parameter;
         const tok_mod: TokenModifiers = .{
+            .static = blk: {
+                const document_scope = try builder.handle.getDocumentScope();
+                const scope_index = Analyser.innermostScopeAtIndex(document_scope, child.nameToken());
+                const scope_tag = document_scope.scopes.items(.data)[@intFromEnum(scope_index)].tag;
+                break :blk scope_tag == .container;
+            },
             .readonly = child.isConst(),
         };
 
