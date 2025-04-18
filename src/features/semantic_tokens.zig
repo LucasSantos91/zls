@@ -911,6 +911,7 @@ fn writeNodeTokens(builder: *Builder, node: Ast.Node.Index) error{OutOfMemory}!v
             const symbol_name = offsets.identifierTokenToNameSlice(tree, field_name_token);
 
             try writeNodeTokens(builder, lhs_node);
+
             // TODO This is basically exactly the same as what is done in analysis.resolveTypeOfNode, with the added
             //      writeToken code.
             // Maybe we can hook into it instead? Also applies to Identifier and VarDecl
@@ -924,45 +925,45 @@ fn writeNodeTokens(builder: *Builder, node: Ast.Node.Index) error{OutOfMemory}!v
                 return;
             }
 
-            if (try lhs_type.lookupSymbol(builder.analyser, symbol_name)) |decl_type| {
-                const token_mod: TokenModifiers = blk: {
-                    var left_node = lhs_node;
-                    var current_field_name_token = field_name_token;
-                    var current_node = node;
-                    var left_type = lhs_type;
-                    while (true) {
-                        if (left_type.is_type_val) {
-                            const current_decl = try left_type.lookupSymbol(
-                                builder.analyser,
-                                offsets.identifierTokenToNameSlice(tree, current_field_name_token),
-                            ) orelse break :blk .{ .static = true };
-                            break :blk .{
-                                .readonly = current_decl.isConst(),
-                                .static = true,
-                            };
-                        }
-
-                        if (tree.nodeTag(left_node) != .field_access) {
-                            const left_token = tree.nodeMainToken(left_node);
-                            const left_decl = try builder.analyser.lookupSymbolGlobal(
-                                handle,
-                                offsets.identifierTokenToNameSlice(tree, left_token),
-                                tree.tokenStart(left_token),
-                            ) orelse break :blk .{};
-                            break :blk .{
-                                .readonly = left_decl.isConst(),
-                                .static = try isStaticToken(builder, left_token),
-                            };
-                        }
-                        current_node = left_node;
-                        left_node, current_field_name_token = tree.nodeData(left_node).node_and_token;
-                        left_type = try builder.analyser.resolveTypeOfNode(.{
-                            .node = left_node,
-                            .handle = handle,
-                        }) orelse break :blk .{};
+            const token_mod: TokenModifiers = blk: {
+                var left_node = lhs_node;
+                var current_field_name_token = field_name_token;
+                var current_node = node;
+                var left_type = lhs_type;
+                while (true) {
+                    if (left_type.is_type_val) {
+                        const current_decl = try left_type.lookupSymbol(
+                            builder.analyser,
+                            offsets.identifierTokenToNameSlice(tree, current_field_name_token),
+                        ) orelse break :blk .{ .static = true };
+                        break :blk .{
+                            .readonly = current_decl.isConst(),
+                            .static = true,
+                        };
                     }
-                };
 
+                    if (tree.nodeTag(left_node) != .field_access) {
+                        const left_token = tree.nodeMainToken(left_node);
+                        const left_decl = try builder.analyser.lookupSymbolGlobal(
+                            handle,
+                            offsets.identifierTokenToNameSlice(tree, left_token),
+                            tree.tokenStart(left_token),
+                        ) orelse break :blk .{};
+                        break :blk .{
+                            .readonly = left_decl.isConst(),
+                            .static = try isStaticToken(builder, left_token),
+                        };
+                    }
+                    current_node = left_node;
+                    left_node, current_field_name_token = tree.nodeData(left_node).node_and_token;
+                    left_type = try builder.analyser.resolveTypeOfNode(.{
+                        .node = left_node,
+                        .handle = handle,
+                    }) orelse break :blk .{};
+                    left_type = try builder.analyser.resolveDerefType(left_type) orelse left_type;
+                }
+            };
+            if (try lhs_type.lookupSymbol(builder.analyser, symbol_name)) |decl_type| {
                 switch (decl_type.decl) {
                     .ast_node => |decl_node| {
                         if (decl_type.handle.tree.nodeTag(decl_node).isContainerField()) {
@@ -985,7 +986,7 @@ fn writeNodeTokens(builder: *Builder, node: Ast.Node.Index) error{OutOfMemory}!v
                 }
             }
 
-            try writeTokenMod(builder, field_name_token, .variable, .{});
+            try writeTokenMod(builder, field_name_token, .variable, token_mod);
         },
         .ptr_type,
         .ptr_type_aligned,
