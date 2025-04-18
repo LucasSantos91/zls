@@ -951,7 +951,7 @@ fn writeNodeTokens(builder: *Builder, node: Ast.Node.Index) error{OutOfMemory}!v
                             ) orelse break :blk .{};
                             break :blk .{
                                 .readonly = left_decl.isConst(),
-                                .static = try isStatic(builder, left_decl.nameToken()),
+                                .static = try isStaticToken(builder, left_token),
                             };
                         }
                         current_node = left_node;
@@ -1090,9 +1090,10 @@ fn writeVarDecl(builder: *Builder, var_decl: Ast.full.VarDecl, resolved_type: ?A
 
     const token_mod: TokenModifiers = .{
         .declaration = true,
-        .readonly = builder.handle.tree.tokenTag(var_decl.ast.mut_token) == .keyword_const,
-        .static = try isStatic(builder, var_decl.ast.mut_token),
+        .readonly = tree.tokenTag(var_decl.ast.mut_token) == .keyword_const,
+        .static = try isStaticToken(builder, var_decl.ast.mut_token),
     };
+
     if (resolved_type) |decl_type| {
         try colorIdentifierBasedOnType(builder, decl_type, var_decl.ast.mut_token + 1, false, token_mod);
     } else {
@@ -1112,9 +1113,10 @@ fn writeVarDecl(builder: *Builder, var_decl: Ast.full.VarDecl, resolved_type: ?A
     }
 }
 
-fn isStatic(builder: *Builder, name_token: Ast.TokenIndex) error{OutOfMemory}!bool {
+fn isStaticToken(builder: *Builder, token_index: Ast.TokenIndex) error{OutOfMemory}!bool {
+    const source_index = builder.handle.tree.tokenStart(token_index);
     const document_scope = try builder.handle.getDocumentScope();
-    const scope_index = Analyser.innermostScopeAtIndex(document_scope, name_token);
+    const scope_index = Analyser.innermostScopeAtIndex(document_scope, source_index);
     const scope_tag = document_scope.scopes.items(.data)[@intFromEnum(scope_index)].tag;
     return scope_tag == .container;
 }
@@ -1141,7 +1143,7 @@ fn writeIdentifier(builder: *Builder, name_token: Ast.TokenIndex) error{OutOfMem
     )) |child| {
         const is_param = child.decl == .function_parameter;
         const tok_mod: TokenModifiers = .{
-            .static = try isStatic(builder, child.nameToken()),
+            .static = try isStaticToken(builder, child.nameToken()),
             .readonly = child.isConst(),
         };
 
